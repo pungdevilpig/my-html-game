@@ -1,0 +1,664 @@
+<!DOCTYPE html>
+<html lang="th">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>อาณาจักรเวหาคณิตศาสตร์ (Math Sky Realm)</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link href="https://fonts.googleapis.com/css2?family=Mali:wght@400;600;700&display=swap" rel="stylesheet">
+    <style>
+        body { margin: 0; overflow: hidden; font-family: 'Mali', cursive; background-color: #87CEEB; touch-action: none; user-select: none; }
+        canvas { display: block; width: 100vw; height: 100vh; }
+        
+        #game-ui, #start-screen, #quiz-screen, #game-over-screen { position: absolute; top: 0; left: 0; width: 100%; height: 100%; pointer-events: none; }
+        #start-screen, #quiz-screen, #game-over-screen { display: flex; justify-content: center; align-items: center; background: rgba(0,0,0,0.5); pointer-events: auto; z-index: 50; }
+        
+        .panel { background: white; border-radius: 24px; padding: 2rem; box-shadow: 0 10px 25px rgba(0,0,0,0.2); text-align: center; max-width: 90%; width: 500px; border: 4px solid #4FC3F7; }
+        
+        .avatar-btn { font-size: 3rem; cursor: pointer; transition: transform 0.2s; filter: grayscale(100%); opacity: 0.5; background: none; border: none; outline: none; }
+        .avatar-btn.selected { filter: grayscale(0%); opacity: 1; transform: scale(1.2); }
+        
+        .btn-squash { transition: transform 0.1s ease-in-out; }
+        .btn-squash:active { transform: scale(0.9); }
+        
+        .quiz-choice { width: 100%; padding: 1rem; margin-bottom: 0.5rem; border-radius: 12px; border: 2px solid #E2E8F0; background: #F0F9FF; font-size: 1.2rem; cursor: pointer; transition: all 0.2s; font-family: 'Mali', cursive; font-weight: 600; pointer-events: auto;}
+        .quiz-choice:hover:not(:disabled) { background: #BAE6FD; transform: translateY(-2px); }
+        .quiz-choice.correct { background: #86EFAC; border-color: #22C55E; color: #166534; }
+        .quiz-choice.wrong { background: #FCA5A5; border-color: #EF4444; color: #991B1B; animation: shake 0.4s; }
+        .quiz-choice:disabled { cursor: not-allowed; }
+
+        @keyframes shake {
+            0%, 100% { transform: translateX(0); }
+            25% { transform: translateX(-5px); }
+            50% { transform: translateX(5px); }
+            75% { transform: translateX(-5px); }
+        }
+
+        .touch-controls { position: absolute; bottom: 20px; pointer-events: auto; display: none; gap: 10px; z-index: 40;}
+        .touch-btn { width: 75px; height: 75px; background: rgba(255, 255, 255, 0.8); border: 3px solid rgba(0,0,0,0.1); border-radius: 50%; display: flex; justify-content: center; align-items: center; font-size: 2rem; user-select: none; }
+        .touch-btn:active { background: rgba(255, 255, 255, 1); transform: scale(0.9); }
+
+        #progress-bar-container { position: absolute; top: 10px; left: 50%; transform: translateX(-50%); width: 80%; max-width: 600px; height: 15px; background: rgba(255,255,255,0.4); border-radius: 10px; border: 2px solid white; pointer-events: none;}
+        #progress-indicator { position: absolute; top: -10px; font-size: 1.5rem; transition: left 0.1s linear; }
+    </style>
+</head>
+<body>
+
+    <canvas id="gameCanvas"></canvas>
+
+    <div id="game-ui">
+        <div class="absolute top-4 left-4 bg-white/90 px-4 py-2 rounded-2xl border-2 border-sky-200 shadow-sm flex flex-col pointer-events-auto">
+            <div id="hud-name" class="font-bold text-sky-600">นักบินน้อย</div>
+            <div class="flex items-center gap-2">
+                <div id="hud-hp" class="text-xl">❤️❤️❤️</div>
+                <div id="hud-score" class="font-bold text-blue-600 bg-blue-100 px-2 rounded-lg">⭐ 0/20</div>
+            </div>
+        </div>
+        <div id="progress-bar-container">
+            <div id="progress-indicator">🚀</div>
+            <div class="absolute right-[-10px] top-[-5px] text-xl">🏁</div>
+        </div>
+    </div>
+
+    <div id="touch-left-panel" class="touch-controls left-4">
+        <div class="touch-btn" id="btn-left">◀️</div>
+        <div class="touch-btn" id="btn-right">▶️</div>
+    </div>
+    <div id="touch-right-panel" class="touch-controls right-4">
+        <div class="touch-btn" id="btn-jump">🔼</div>
+    </div>
+
+    <div id="start-screen">
+        <div class="panel">
+            <h1 class="text-4xl font-bold text-sky-500 mb-2">อาณาจักรเวหา</h1>
+            <p class="text-gray-500 mb-6 font-bold text-lg">บทเรียนคณิตศาสตร์: จำนวนเต็ม ม.1</p>
+            
+            <input type="text" id="player-name" value="นักบินน้อย" class="w-full text-center border-2 border-sky-300 p-2 rounded-xl text-xl mb-4 focus:outline-none focus:border-sky-500 font-mali" placeholder="พิมพ์ชื่อของคุณ...">
+            
+            <div class="flex justify-center gap-4 mb-6">
+                <button class="avatar-btn selected" onclick="selectAvatar('🚀', this)">🚀</button>
+                <button class="avatar-btn" onclick="selectAvatar('🛸', this)">🛸</button>
+                <button class="avatar-btn" onclick="selectAvatar('🚁', this)">🚁</button>
+            </div>
+            
+            <button id="start-btn" class="btn-squash w-full bg-gradient-to-r from-sky-400 to-blue-500 text-white font-bold text-2xl py-3 rounded-xl shadow-lg border-b-4 border-blue-700">
+                เริ่มบินกันเลย! ☁️
+            </button>
+        </div>
+    </div>
+
+    <div id="quiz-screen" style="display: none;">
+        <div class="panel">
+            <div class="text-5xl mb-4">💎</div>
+            <h2 id="question-text" class="text-2xl font-bold text-gray-800 mb-6 leading-relaxed">คำถาม?</h2>
+            <div id="choices-container" class="flex flex-col gap-2"></div>
+            <div id="explanation-banner" class="hidden mt-4 p-3 rounded-lg text-white font-bold text-lg"></div>
+        </div>
+    </div>
+
+    <div id="game-over-screen" style="display: none;">
+        <div class="panel">
+            <h1 id="end-title" class="text-4xl font-bold mb-4">จบภารกิจ!</h1>
+            <p id="end-score" class="text-2xl text-gray-700 mb-6">เก็บคริสตัลได้: 0/20</p>
+            <button onclick="location.reload()" class="btn-squash bg-sky-500 text-white font-bold text-xl py-2 px-6 rounded-xl shadow-lg border-b-4 border-sky-700">เล่นอีกครั้ง</button>
+        </div>
+    </div>
+
+<script>
+// --- 1. GAME DATA & CONFIG ---
+const GAME_CONFIG = {
+    gravity: 0.55,
+    fallMultiplier: 1.6,
+    jumpVelocity: -14,
+    speed: 5.5,
+    coyoteTimeMax: 8,
+    jumpBufferMax: 10,
+    totalMushrooms: 20
+};
+
+// Logic Questions (ม.1 จำนวนเต็ม)
+const logicQuestions = [
+    { q: "(-5) + 8 = ?", choices: ["-13", "3", "-3"], a: 1, exp: "มีเงิน 8 บาท จ่ายหนี้ 5 บาท เหลือ 3 บาท" },
+    { q: "(-10) + (-4) = ?", choices: ["-14", "-6", "14"], a: 0, exp: "เป็นหนี้ 10 บาท เพิ่มอีก 4 บาท รวมเป็นหนี้ 14 บาท" },
+    { q: "12 - (-5) = ?", choices: ["7", "17", "-17"], a: 1, exp: "ลบด้วยจำนวนลบ กลายเป็นบวก: 12 + 5 = 17" },
+    { q: "(-8) - 3 = ?", choices: ["-5", "-11", "11"], a: 1, exp: "เป็นหนี้ 8 บาท หักออกอีก 3 บาท รวมหนี้ 11 บาท" },
+    { q: "(-4) × 6 = ?", choices: ["-24", "24", "-10"], a: 0, exp: "ลบคูณบวกได้ลบ: 4 x 6 = 24" },
+    { q: "(-7) × (-3) = ?", choices: ["-21", "21", "10"], a: 1, exp: "ลบคูณลบได้บวก: 7 x 3 = 21" },
+    { q: "40 ÷ (-8) = ?", choices: ["-5", "5", "-32"], a: 0, exp: "บวกหารลบได้ลบ: 40 ÷ 8 = 5" },
+    { q: "(-100) ÷ (-4) = ?", choices: ["-25", "25", "400"], a: 1, exp: "ลบหารลบได้บวก: 100 ÷ 4 = 25" },
+    { q: "0 + (-9) = ?", choices: ["9", "0", "-9"], a: 2, exp: "0 บวกกับจำนวนใดก็ได้จำนวนนั้น" },
+    { q: "(-15) + 15 = ?", choices: ["30", "-30", "0"], a: 2, exp: "จำนวนตรงข้ามบวกกันได้ 0" },
+    { q: "(-2) × 5 × (-1) = ?", choices: ["10", "-10", "11"], a: 0, exp: "(-10) x (-1) = 10" },
+    { q: "10 - 20 = ?", choices: ["10", "-10", "-30"], a: 1, exp: "ตัวตั้งน้อยกว่าตัวลบ ผลลัพธ์จึงติดลบ" },
+    { q: "(-1) × (-1) × (-1) = ?", choices: ["1", "-1", "-3"], a: 1, exp: "ลบคูณกันจำนวนคี่ตัว ผลลัพธ์ติดลบ" },
+    { q: "(-25) + (-25) = ?", choices: ["0", "50", "-50"], a: 2, exp: "ลบรวมกับลบ ได้ลบที่มากขึ้น" },
+    { q: "(-2) + 7 - 5 = ?", choices: ["0", "10", "-10"], a: 0, exp: "(-2) + 7 = 5 และ 5 - 5 = 0" },
+    { q: "(-9) - (-9) = ?", choices: ["-18", "0", "18"], a: 1, exp: "เปลี่ยนลบเป็นบวก: (-9) + 9 = 0" },
+    { q: "(-12) ÷ 3 = ?", choices: ["4", "-4", "-36"], a: 1, exp: "ลบหารบวกได้ลบ" },
+    { q: "(-6) × 0 = ?", choices: ["-6", "6", "0"], a: 2, exp: "จำนวนใดคูณ 0 ได้ 0 เสมอ" },
+    { q: "(-4) + (-3) + 7 = ?", choices: ["0", "14", "-14"], a: 0, exp: "(-4) + (-3) = -7 และ -7 + 7 = 0" },
+    { q: "(-50) ÷ 2 = ?", choices: ["25", "-25", "-100"], a: 1, exp: "ลบหารบวกได้ลบ" }
+];
+
+// --- 2. GLOBAL VARIABLES ---
+const canvas = document.getElementById('gameCanvas');
+const ctx = canvas.getContext('2d');
+let audioCtx;
+let width, height;
+let gameState = 'START';
+let currentQuestionIndex = 0;
+let keys = { ArrowLeft: false, ArrowRight: false, ArrowUp: false, Space: false };
+
+let player = {
+    x: 100, y: 0, width: 45, height: 45,
+    vx: 0, vy: 0,
+    hp: 3, score: 0,
+    avatar: '🚀', name: 'นักบินน้อย',
+    onGround: false,
+    coyoteTimer: 0, jumpBuffer: 0,
+    scaleX: 1, scaleY: 1,
+    lastSafeX: 100, lastSafeY: 0
+};
+
+let cameraX = 0;
+let levelWidth = 0;
+let platforms = [];
+let mushrooms = [];
+let particles = [];
+let decorations = [];
+
+const uiProgressIcon = document.getElementById('progress-indicator');
+const uiHp = document.getElementById('hud-hp');
+const uiScore = document.getElementById('hud-score');
+
+// --- 3. AUDIO SYSTEM ---
+function initAudio() {
+    if (!audioCtx) audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+    if(audioCtx.state === 'suspended') audioCtx.resume();
+}
+
+function playSound(type) {
+    if (!audioCtx) return;
+    const osc = audioCtx.createOscillator();
+    const gainNode = audioCtx.createGain();
+    osc.connect(gainNode);
+    gainNode.connect(audioCtx.destination);
+    const now = audioCtx.currentTime;
+    
+    if (type === 'jump') {
+        osc.frequency.setValueAtTime(400, now);
+        osc.frequency.exponentialRampToValueAtTime(800, now + 0.1);
+        gainNode.gain.setValueAtTime(0.1, now);
+        osc.start(now); osc.stop(now + 0.1);
+    } else if (type === 'correct') {
+        osc.frequency.setValueAtTime(523, now);
+        osc.frequency.setValueAtTime(659, now + 0.1);
+        gainNode.gain.setValueAtTime(0.1, now);
+        osc.start(now); osc.stop(now + 0.2);
+    } else if (type === 'wrong' || type === 'damage') {
+        osc.type = 'sawtooth';
+        osc.frequency.setValueAtTime(100, now);
+        gainNode.gain.setValueAtTime(0.1, now);
+        osc.start(now); osc.stop(now + 0.2);
+    } else if (type === 'win') {
+        osc.type = 'square';
+        osc.frequency.setValueAtTime(440, now);
+        osc.frequency.setValueAtTime(554, now + 0.15);
+        osc.frequency.setValueAtTime(659, now + 0.3);
+        gainNode.gain.setValueAtTime(0.1, now);
+        osc.start(now); osc.stop(now + 0.8);
+    }
+}
+
+// --- 4. LEVEL GENERATION ---
+function resizeCanvas() {
+    width = window.innerWidth;
+    height = window.innerHeight;
+    canvas.width = width;
+    canvas.height = height;
+    
+    if ('ontouchstart' in window || navigator.maxTouchPoints > 0) {
+        document.getElementById('touch-left-panel').style.display = 'flex';
+        document.getElementById('touch-right-panel').style.display = 'flex';
+    }
+}
+window.addEventListener('resize', resizeCanvas);
+
+function generateLevel() {
+    platforms = [];
+    mushrooms = [];
+    decorations = [];
+    
+    let currentX = 0;
+    let baseY = height * 0.7;
+    
+    platforms.push({ x: currentX, y: baseY, w: 600, h: height - baseY, isCloud: false });
+    player.lastSafeX = 100;
+    player.lastSafeY = baseY - player.height;
+    player.y = player.lastSafeY;
+    
+    currentX += 600;
+
+    for (let i = 0; i < GAME_CONFIG.totalMushrooms; i++) {
+        let gap = Math.random() * 60 + 60; // เหวแคบๆ เพื่อความง่าย
+        currentX += gap;
+
+        let pWidth = Math.random() * 200 + 200;
+        let pY = baseY + (Math.random() * 140 - 70); 
+        if (pY > height * 0.8) pY = height * 0.8;
+        if (pY < height * 0.3) pY = height * 0.3;
+
+        platforms.push({ x: currentX, y: pY, w: pWidth, h: 40, isCloud: true });
+        
+        mushrooms.push({ x: currentX + pWidth/2, y: pY - 60, width: 30, height: 30, active: true, baseY: pY - 60, qIndex: i });
+
+        if (Math.random() > 0.6) {
+            decorations.push({ x: currentX + 30, y: pY, type: '⭐', size: 30 });
+        }
+        currentX += pWidth;
+    }
+
+    currentX += 150;
+    platforms.push({ x: currentX, y: baseY, w: 800, h: height - baseY, isCloud: false });
+    decorations.push({ x: currentX + 400, y: baseY, type: '🏁', size: 60 });
+    
+    levelWidth = currentX + 800;
+}
+
+// --- 5. VISUALS ---
+function spawnParticles(x, y, color, count, isConfetti = false) {
+    for (let i = 0; i < count; i++) {
+        particles.push({
+            x: x, y: y,
+            vx: (Math.random() - 0.5) * (isConfetti ? 10 : 4),
+            vy: (Math.random() - 1) * (isConfetti ? 10 : 2),
+            life: 1,
+            color: isConfetti ? `hsl(${Math.random()*360}, 100%, 50%)` : color,
+            size: Math.random() * 6 + 2
+        });
+    }
+}
+
+function drawParallaxBackground() {
+    let skyGrad = ctx.createLinearGradient(0, 0, 0, height);
+    skyGrad.addColorStop(0, "#00BFFF");
+    skyGrad.addColorStop(1, "#E0F7FA");
+    ctx.fillStyle = skyGrad;
+    ctx.fillRect(0, 0, width, height);
+
+    ctx.fillStyle = "rgba(255,255,255,0.6)";
+    let time = Date.now() * 0.00005;
+    for(let i=0; i<4; i++) {
+        let cx = ((i * 450 + time * 1000) % (width + 300)) - 150;
+        ctx.beginPath();
+        ctx.arc(cx, 150 + i*60, 50, 0, Math.PI*2);
+        ctx.arc(cx+40, 140 + i*60, 60, 0, Math.PI*2);
+        ctx.arc(cx+80, 150 + i*60, 50, 0, Math.PI*2);
+        ctx.fill();
+    }
+}
+
+function drawLevel() {
+    ctx.save();
+    ctx.translate(-cameraX, 0);
+
+    ctx.textAlign = "center";
+    ctx.globalAlpha = 1;
+    decorations.forEach(d => {
+        if(d.x > cameraX - 100 && d.x < cameraX + width + 100) {
+            ctx.font = `${d.size}px Arial`;
+            ctx.fillText(d.type, d.x, d.y - 10);
+        }
+    });
+
+    platforms.forEach(p => {
+        if(p.x + p.w > cameraX && p.x < cameraX + width) {
+            if(p.isCloud) {
+                // แก้ไขการวาดเมฆโดยใช้ arc แทน roundRect เพื่อให้ทำงานได้ทุกบราวเซอร์
+                ctx.fillStyle = "white";
+                ctx.beginPath();
+                ctx.arc(p.x + 20, p.y + 20, 20, Math.PI*0.5, Math.PI*1.5);
+                ctx.lineTo(p.x + p.w - 20, p.y);
+                ctx.arc(p.x + p.w - 20, p.y + 20, 20, Math.PI*1.5, Math.PI*0.5);
+                ctx.closePath();
+                ctx.fill();
+                ctx.strokeStyle = "#B3E5FC"; 
+                ctx.lineWidth = 3; 
+                ctx.stroke();
+            } else {
+                ctx.fillStyle = "#81D4FA";
+                ctx.fillRect(p.x, p.y, p.w, p.h);
+                ctx.fillStyle = "#4FC3F7";
+                ctx.fillRect(p.x, p.y, p.w, 15);
+            }
+        }
+    });
+
+    ctx.fillStyle = "#000000";
+    mushrooms.forEach(m => {
+        if (m.active) {
+            m.y = m.baseY + Math.sin(Date.now() * 0.005 + m.qIndex) * 10;
+            ctx.font = "35px Arial";
+            ctx.fillText("💎", m.x, m.y);
+        }
+    });
+
+    particles.forEach((p, index) => {
+        p.x += p.vx;
+        p.y += p.vy;
+        p.life -= 0.02;
+        if (p.life <= 0) {
+            particles.splice(index, 1);
+        } else {
+            ctx.fillStyle = p.color;
+            ctx.globalAlpha = p.life;
+            ctx.beginPath();
+            ctx.arc(p.x, p.y, p.size, 0, Math.PI*2);
+            ctx.fill();
+            ctx.globalAlpha = 1;
+        }
+    });
+
+    ctx.globalAlpha = 1;
+    ctx.translate(player.x + player.width/2, player.y + player.height/2);
+    ctx.scale(player.scaleX, player.scaleY);
+    ctx.font = "45px Arial";
+    ctx.textAlign = "center";
+    ctx.textBaseline = "middle";
+    ctx.fillText(player.avatar, 0, 0);
+    
+    ctx.scale(1/player.scaleX, 1/player.scaleY); 
+    ctx.font = "14px Mali";
+    ctx.fillStyle = "#0284c7";
+    ctx.strokeStyle = "white";
+    ctx.lineWidth = 3;
+    ctx.strokeText(player.name, 0, -35);
+    ctx.fillText(player.name, 0, -35);
+
+    ctx.restore();
+}
+
+// --- 6. PHYSICS & LOGIC ---
+function updatePhysics() {
+    if (gameState !== 'PLAY') return;
+
+    if (keys.ArrowLeft) {
+        player.vx = -GAME_CONFIG.speed;
+    } else if (keys.ArrowRight) {
+        player.vx = GAME_CONFIG.speed;
+    } else {
+        player.vx = 0;
+    }
+
+    player.x += player.vx;
+    if (player.x < 0) player.x = 0;
+
+    if (player.vy > 0) {
+        player.vy += GAME_CONFIG.gravity * GAME_CONFIG.fallMultiplier;
+    } else {
+        player.vy += GAME_CONFIG.gravity;
+    }
+    
+    player.y += player.vy;
+    player.onGround = false;
+
+    for (let p of platforms) {
+        if (player.x < p.x + p.w && player.x + player.width > p.x &&
+            player.y < p.y + p.h && player.y + player.height > p.y) {
+            
+            if (player.vy > 0 && player.y + player.height - player.vy <= p.y + 15) {
+                if(!player.onGround && player.vy > 5) {
+                    player.scaleX = 1.3; player.scaleY = 0.7;
+                }
+                player.y = p.y - player.height;
+                player.vy = 0;
+                player.onGround = true;
+                
+                if (Math.abs(player.vx) === 0) {
+                    player.lastSafeX = player.x;
+                    player.lastSafeY = player.y;
+                }
+            } 
+            else if (player.vy !== 0) {
+                if (player.x + player.width/2 < p.x + p.w/2) {
+                    player.x = p.x - player.width;
+                } else {
+                    player.x = p.x + p.w;
+                }
+            }
+        }
+    }
+
+    if (player.onGround) {
+        player.coyoteTimer = GAME_CONFIG.coyoteTimeMax;
+    } else {
+        player.coyoteTimer--;
+    }
+    player.jumpBuffer--;
+
+    if (player.jumpBuffer > 0 && player.coyoteTimer > 0) {
+        player.vy = GAME_CONFIG.jumpVelocity;
+        player.jumpBuffer = 0;
+        player.coyoteTimer = 0;
+        player.onGround = false;
+        player.scaleX = 0.7; player.scaleY = 1.3;
+        playSound('jump');
+    }
+
+    player.scaleX += (1 - player.scaleX) * 0.15;
+    player.scaleY += (1 - player.scaleY) * 0.15;
+
+    let targetCameraX = player.x - width / 2 + 100;
+    if (targetCameraX < 0) targetCameraX = 0;
+    if (targetCameraX > levelWidth - width) targetCameraX = levelWidth - width;
+    cameraX += (targetCameraX - cameraX) * 0.1;
+
+    if (player.y > height + 100) {
+        handleDamage();
+    }
+
+    mushrooms.forEach(m => {
+        if (m.active && 
+            player.x < m.x + m.width && player.x + player.width > m.x - m.width &&
+            player.y < m.y + m.height && player.y + player.height > m.y - m.height) {
+            triggerQuiz(m);
+        }
+    });
+
+    if (player.x > levelWidth - 400) {
+        triggerWin();
+    }
+
+    updateUI();
+}
+
+function handleDamage() {
+    playSound('damage');
+    player.hp--;
+    spawnParticles(player.lastSafeX, player.lastSafeY, "red", 20, true);
+    
+    if (player.hp <= 0) {
+        triggerGameOver();
+    } else {
+        player.x = player.lastSafeX;
+        player.y = player.lastSafeY;
+        player.vy = 0;
+        updateUI();
+    }
+}
+
+function updateUI() {
+    uiHp.innerText = '❤️'.repeat(player.hp) + '🖤'.repeat(3 - player.hp);
+    uiScore.innerText = `⭐ ${player.score}/${GAME_CONFIG.totalMushrooms}`;
+    
+    let progressPercent = Math.min(100, Math.max(0, (player.x / (levelWidth - 400)) * 100));
+    uiProgressIcon.style.left = `${progressPercent}%`;
+}
+
+// --- 7. QUIZ SYSTEM ---
+function triggerQuiz(mushroom) {
+    gameState = 'QUIZ';
+    mushroom.active = false;
+    currentQuestionIndex = mushroom.qIndex;
+    keys.ArrowLeft = keys.ArrowRight = keys.ArrowUp = keys.Space = false; 
+
+    let qData = logicQuestions[currentQuestionIndex];
+    document.getElementById('question-text').innerText = qData.q;
+    
+    let container = document.getElementById('choices-container');
+    container.innerHTML = '';
+    
+    qData.choices.forEach((choice, idx) => {
+        let btn = document.createElement('button');
+        btn.className = 'quiz-choice';
+        btn.innerText = choice;
+        btn.onclick = () => handleAnswer(idx, qData.a, btn, qData.exp);
+        container.appendChild(btn);
+    });
+
+    document.getElementById('explanation-banner').classList.add('hidden');
+    document.getElementById('quiz-screen').style.display = 'flex';
+}
+
+function handleAnswer(selectedIndex, correctIndex, btnElement, explanation) {
+    let buttons = document.querySelectorAll('.quiz-choice');
+    buttons.forEach(b => b.disabled = true); 
+
+    let banner = document.getElementById('explanation-banner');
+    banner.classList.remove('hidden', 'bg-green-500', 'bg-red-500');
+    banner.innerText = explanation;
+
+    if (selectedIndex === correctIndex) {
+        playSound('correct');
+        btnElement.classList.add('correct');
+        banner.classList.add('bg-green-500');
+        player.score++;
+        spawnParticles(player.x, player.y, "cyan", 30, true);
+    } else {
+        playSound('wrong');
+        btnElement.classList.add('wrong');
+        buttons[correctIndex].classList.add('correct'); 
+        banner.classList.add('bg-red-500');
+        spawnParticles(player.x, player.y, "red", 30, true);
+    }
+
+    updateUI();
+
+    setTimeout(() => {
+        document.getElementById('quiz-screen').style.display = 'none';
+        gameState = 'PLAY';
+    }, 1800);
+}
+
+// --- 8. GAME LOOP ---
+function gameLoop() {
+    ctx.clearRect(0, 0, width, height);
+
+    drawParallaxBackground();
+    drawLevel();
+    
+    if(gameState === 'PLAY' || gameState === 'QUIZ') {
+        updatePhysics();
+    }
+
+    requestAnimationFrame(gameLoop);
+}
+
+function startGame() {
+    initAudio(); 
+    let nameInput = document.getElementById('player-name').value;
+    if(nameInput) player.name = nameInput;
+    document.getElementById('hud-name').innerText = player.name;
+    uiProgressIcon.innerText = player.avatar;
+    
+    document.getElementById('start-screen').style.display = 'none';
+    
+    resizeCanvas();
+    generateLevel();
+    player.hp = 3;
+    player.score = 0;
+    updateUI();
+    
+    gameState = 'PLAY';
+}
+
+function triggerGameOver() {
+    gameState = 'END';
+    document.getElementById('end-title').innerText = "หมดพลังบิน!";
+    document.getElementById('end-title').className = "text-4xl font-bold mb-4 text-red-500";
+    document.getElementById('end-score').innerText = `เก็บคริสตัลไปได้: ${player.score}/${GAME_CONFIG.totalMushrooms}`;
+    document.getElementById('game-over-screen').style.display = 'flex';
+}
+
+function triggerWin() {
+    if(gameState === 'END') return;
+    gameState = 'END';
+    playSound('win');
+    spawnParticles(player.x, player.y, "gold", 100, true);
+    document.getElementById('end-title').innerText = "เก่งมาก! ถึงเส้นชัยแล้ว 🎉";
+    document.getElementById('end-title').className = "text-4xl font-bold mb-4 text-green-500";
+    document.getElementById('end-score').innerText = `คะแนนคณิตศาสตร์: ${player.score}/${GAME_CONFIG.totalMushrooms}`;
+    document.getElementById('game-over-screen').style.display = 'flex';
+}
+
+// --- 9. INPUT HANDLING ---
+window.selectAvatar = function(emoji, btn) {
+    document.querySelectorAll('.avatar-btn').forEach(b => b.classList.remove('selected'));
+    btn.classList.add('selected');
+    player.avatar = emoji;
+}
+
+document.getElementById('start-btn').addEventListener('click', startGame);
+
+document.getElementById('player-name').addEventListener('keydown', e => e.stopPropagation());
+
+window.addEventListener('keydown', e => {
+    if (gameState !== 'PLAY') return;
+    if (e.code in keys) {
+        keys[e.code] = true;
+        if (e.code === 'Space' || e.code === 'ArrowUp') {
+            player.jumpBuffer = GAME_CONFIG.jumpBufferMax;
+            e.preventDefault(); 
+        }
+    }
+});
+
+window.addEventListener('keyup', e => {
+    if (e.code in keys) keys[e.code] = false;
+});
+
+function setupTouch(id, code) {
+    const btn = document.getElementById(id);
+    btn.addEventListener('pointerdown', (e) => {
+        e.preventDefault();
+        keys[code] = true;
+        if(code === 'Space' || code === 'ArrowUp') player.jumpBuffer = GAME_CONFIG.jumpBufferMax;
+    });
+    btn.addEventListener('pointerup', (e) => {
+        e.preventDefault();
+        keys[code] = false;
+    });
+    btn.addEventListener('pointerleave', (e) => {
+        e.preventDefault();
+        keys[code] = false;
+    });
+}
+
+setupTouch('btn-left', 'ArrowLeft');
+setupTouch('btn-right', 'ArrowRight');
+setupTouch('btn-jump', 'ArrowUp'); 
+
+// --- 10. HYBRID BOOT ---
+function boot() {
+    resizeCanvas();
+    requestAnimationFrame(gameLoop);
+}
+
+if (document.readyState === 'loading') {
+    document.addEventListener('DOMContentLoaded', boot);
+} else {
+    boot();
+}
+</script>
+</body>
+</html>
